@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Y2K Seamless Scroll Prototype v15</title>
+    <title>Y2K Seamless Scroll Prototype v16 (Final)</title>
     <style>
         body {
             margin: 0;
             overflow-x: hidden;
-            background-color: #060818; /* 背景色 */
+            background-color: #060818;
             color: white;
             font-family: 'Helvetica Neue', Arial, sans-serif;
         }
@@ -21,7 +21,7 @@
         }
 
         .scroll-content {
-            height: 500vh; /* スクロール領域を確保 */
+            height: 500vh;
             position: relative;
             z-index: 1;
         }
@@ -37,6 +37,7 @@
             background: rgba(0, 0, 0, 0.3);
             border-radius: 10px;
             text-align: center;
+            backdrop-filter: blur(5px);
         }
     </style>
 </head>
@@ -46,16 +47,30 @@
 
     <div class="scroll-content">
         <div class="dummy-content">
-            <h1>Prototype v15</h1>
-            <p>パーティクルを常にループして流れるように変更しました。</p>
+            <h1>Prototype Final</h1>
+            <p>最終エフェクトを追加しました。</p>
         </div>
     </div>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.9.1/gsap.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.9.1/ScrollTrigger.min.js"></script>
+    <script async src="https://unpkg.com/es-module-shims@1.6.3/dist/es-module-shims.js"></script>
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://unpkg.com/three@0.128.0/build/three.module.js",
+            "three/addons/": "https://unpkg.com/three@0.128.0/examples/jsm/"
+        }
+    }
+    </script>
 
-    <script>
+    <script type="module">
+        import * as THREE from 'three';
+        import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+        import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+        import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+        import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+        import { gsap } from "https://cdn.skypack.dev/gsap";
+        import { ScrollTrigger } from "https://cdn.skypack.dev/gsap/ScrollTrigger";
+
         // --- 1. 基本設定 -------------------------------------------
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -73,13 +88,21 @@
         const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
         directionalLight.position.set(5, 5, 5);
         scene.add(directionalLight);
-
+        
+        // ▼▼▼ 変更点: 星雲背景の追加 ▼▼▼
+        const textureLoader = new THREE.TextureLoader();
+        const bgTexture = textureLoader.load('https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/space/dark-s_pz.jpg');
+        const skyboxGeo = new THREE.SphereGeometry(500, 60, 40);
+        const skyboxMat = new THREE.MeshBasicMaterial({
+            map: bgTexture,
+            side: THREE.BackSide
+        });
+        const skybox = new THREE.Mesh(skyboxGeo, skyboxMat);
+        scene.add(skybox);
+        
 
         // --- 2. グリッドの追加 -------------------------------------------
-        const gridSize = 50;
-        const gridDivisions = 50;
-        const gridColor = 0x1a237e;
-
+        const gridSize = 50, gridDivisions = 50, gridColor = 0x1a237e;
         const wallGridHelper = new THREE.GridHelper(gridSize, gridDivisions, gridColor, gridColor);
         wallGridHelper.position.z = -15; 
         wallGridHelper.rotation.x = Math.PI / 2;
@@ -99,9 +122,7 @@
 
         // --- 3. 星オブジェクトの作成 ---------------------------------
         const vertices = [];
-        const outerRadius = 2;
-        const innerRadius = 1;
-        const pointsCount = 5;
+        const outerRadius = 2, innerRadius = 1, pointsCount = 5;
         for (let i = 0; i < pointsCount * 2; i++) {
             const radius = (i % 2 === 0) ? outerRadius : innerRadius;
             const angle = (i * Math.PI) / pointsCount;
@@ -120,96 +141,105 @@
         pivot.rotation.x = -0.4;
         
         // --- 4. パーティクルの作成 ---------------------------------
-        // ▼▼▼ 変更点: パーティクルの量を調整 ▼▼▼
         const particleCount = 1500;
         const particlePositions = new Float32Array(particleCount * 3);
-
-        // ▼▼▼ 変更点: パーティクルの初期配置を空間全体に広げる ▼▼▼
         for (let i = 0; i < particleCount; i++) {
             const i3 = i * 3;
-            particlePositions[i3] = (Math.random() - 0.5) * 50; // x
-            particlePositions[i3 + 1] = (Math.random() - 0.5) * 50; // y
-            particlePositions[i3 + 2] = (Math.random() - 0.5) * 100; // z
+            particlePositions[i3] = (Math.random() - 0.5) * 50;
+            particlePositions[i3 + 1] = (Math.random() - 0.5) * 50;
+            particlePositions[i3 + 2] = (Math.random() - 0.5) * 100;
         }
 
         const particleGeometry = new THREE.BufferGeometry();
         particleGeometry.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
-
-        const particleMaterial = new THREE.PointsMaterial({
-            color: 0xffffff,
-            size: 0.1,
-            sizeAttenuation: true,
-            transparent: true,
-            blending: THREE.AdditiveBlending
-        });
-
+        const particleMaterial = new THREE.PointsMaterial({ color: 0xffffff, size: 0.1, sizeAttenuation: true, transparent: true, blending: THREE.AdditiveBlending });
         const particles = new THREE.Points(particleGeometry, particleMaterial);
         scene.add(particles);
 
+        // ▼▼▼ 変更点: ポストプロセスの設定 ▼▼▼
+        // --- 5. ポストプロセス (ノイズ & ブルーム) --------------------
+        const composer = new EffectComposer(renderer);
+        composer.addPass(new RenderPass(scene, camera));
 
-        // --- 5. スクロールアニメーション (GSAP) ------------------------
+        // ブルーム
+        const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.5, 0.4, 0.85);
+        bloomPass.threshold = 0;
+        bloomPass.strength = 0.5; // 光の強さ
+        bloomPass.radius = 0;
+        composer.addPass(bloomPass);
+
+        // ノイズシェーダー
+        const NoiseShader = {
+            uniforms: {
+                'tDiffuse': { value: null },
+                'amount': { value: 0.05 },
+                'time': { value: 0.0 }
+            },
+            vertexShader: `varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+            fragmentShader: `
+                uniform sampler2D tDiffuse;
+                uniform float amount;
+                uniform float time;
+                varying vec2 vUv;
+                
+                float rand(vec2 co){ return fract(sin(dot(co.xy, vec2(12.9898,78.233))) * 43758.5453); }
+
+                void main() {
+                    vec4 color = texture2D(tDiffuse, vUv);
+                    float noise = (rand(vUv + time) - 0.5) * amount;
+                    gl_FragColor = vec4(color.rgb + noise, color.a);
+                }
+            `
+        };
+        const noisePass = new ShaderPass(NoiseShader);
+        noisePass.renderToScreen = true;
+        composer.addPass(noisePass);
+
+        // --- 6. スクロールアニメーション (GSAP) ------------------------
         gsap.registerPlugin(ScrollTrigger);
-
-        // 星の回転
-        gsap.to(star.rotation, {
-            z: Math.PI * 4,
-            scrollTrigger: {
-                trigger: '.scroll-content',
-                start: 'top top',
-                end: 'bottom bottom',
-                scrub: 1,
-            }
-        });
+        gsap.to(star.rotation, { z: Math.PI * 4, scrollTrigger: { trigger: '.scroll-content', start: 'top top', end: 'bottom bottom', scrub: 1 } });
         
-        // ▼▼▼ 変更点: GSAPによるパーティクルアニメーションを削除 ▼▼▼
-        // (描画ループ内で直接アニメーションさせるため不要に)
 
-
-        // --- 6. 低FPSでの描画ループ ---------------------------------
+        // --- 7. 低FPSでの描画ループ ---------------------------------
         const clock = new THREE.Clock();
         const fps = 15;
         const interval = 1 / fps;
         let delta = 0;
-        const flowSpeed = 0.5; // パーティクルの流れる速さを調整
+        const flowSpeed = 0.5;
 
         function animate() {
             requestAnimationFrame(animate);
             delta += clock.getDelta();
 
             if (delta > interval) {
-                
-                // ▼▼▼ 変更点: ここでパーティクルをループさせる ▼▼▼
                 const positions = particleGeometry.attributes.position.array;
                 for (let i = 0; i < particleCount; i++) {
                     const i3 = i * 3;
-                    
-                    // Y軸とZ軸の位置を更新して流す
-                    positions[i3 + 1] -= flowSpeed * 0.2; // Y (下方向)
-                    positions[i3 + 2] += flowSpeed; // Z (手前方向)
-
-                    // 画面外に出たら、奥のランダムな位置に戻す
+                    positions[i3 + 1] -= flowSpeed * 0.2;
+                    positions[i3 + 2] += flowSpeed;
                     if (positions[i3 + 2] > camera.position.z) {
                         positions[i3] = (Math.random() - 0.5) * 50;
                         positions[i3 + 1] = (Math.random() - 0.5) * 50;
-                        positions[i3 + 2] = -50; // Z座標を一番奥にリセット
+                        positions[i3 + 2] = -50;
                     }
                 }
-                // 更新をThree.jsに伝える
                 particleGeometry.attributes.position.needsUpdate = true;
-                // ▲▲▲ 変更点: ここまで ▲▲▲
                 
-                renderer.render(scene, camera);
+                // ▼▼▼ 変更点: composer.render()を呼ぶ ▼▼▼
+                noisePass.uniforms.time.value += 0.01;
+                composer.render();
                 delta = delta % interval;
             }
         }
         animate();
 
 
-        // --- 7. ウィンドウリサイズ対応 -------------------------------
+        // --- 8. ウィンドウリサイズ対応 -------------------------------
         window.addEventListener('resize', () => {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
+            composer.setSize(window.innerWidth, window.innerHeight);
         });
 
     </script>
