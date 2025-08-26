@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Y2K Seamless Scroll Prototype v7</title>
+    <style>
+        body {
+            margin: 0;
+            overflow-x: hidden;
+            background-color: #060818; /* 背景色 */
+            color: white;
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+        }
+
+        #webgl-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            outline: none;
+        }
+
+        .scroll-content {
+            height: 500vh; /* スクロール領域を確保 */
+            position: relative;
+            z-index: 1;
+        }
+
+        .dummy-content {
+            position: absolute;
+            top: 200vh;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 80%;
+            max-width: 600px;
+            padding: 2rem;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+
+    <canvas id="webgl-canvas"></canvas>
+
+    <div class="scroll-content">
+        <div class="dummy-content">
+            <h1>Prototype v7</h1>
+            <p>オブジェクトを右斜めに配置しました。</p>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.9.1/gsap.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.9.1/ScrollTrigger.min.js"></script>
+
+    <script>
+        // --- 1. 基本設定 -------------------------------------------
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({
+            canvas: document.querySelector('#webgl-canvas'),
+            antialias: true
+        });
+
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        camera.position.setZ(5);
+
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+        scene.add(ambientLight);
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+        directionalLight.position.set(5, 5, 5);
+        scene.add(directionalLight);
+
+
+        // --- 2. 星オブジェクトの作成 ---------------------------------
+        const vertices = [];
+        const outerRadius = 2;
+        const innerRadius = 1;
+        const pointsCount = 5;
+        for (let i = 0; i < pointsCount * 2; i++) {
+            const radius = (i % 2 === 0) ? outerRadius : innerRadius;
+            const angle = (i * Math.PI) / pointsCount;
+            vertices.push(new THREE.Vector3(
+                Math.sin(angle) * radius,
+                Math.cos(angle) * radius,
+                0
+            ));
+        }
+        
+        const path = new THREE.CatmullRomCurve3(vertices, true, 'catmullrom', 0);
+        const geometry = new THREE.TubeGeometry(path, 400, 0.05, 12, true);
+        const material = new THREE.MeshStandardMaterial({
+            color: '#c0c0c0',
+            metalness: 0.9,
+            roughness: 0.4,
+        });
+
+        const star = new THREE.Mesh(geometry, material);
+        // ▼▼▼ 変更点: ここから ▼▼▼
+        // 透明な台座（pivot）を作成
+        const pivot = new THREE.Group();
+        scene.add(pivot); // シーンには台座を追加
+
+        // 台座に星を追加
+        pivot.add(star);
+
+        // 台座自体を傾けることで、全体の向きを調整
+        pivot.rotation.y = 0.6; // Y軸回転（左右の向き）
+        pivot.rotation.x = -0.4;  // X軸回転（上下の傾き）
+        // ▲▲▲ 変更点: ここまで ▲▲▲
+
+
+        // --- 3. スクロールアニメーション (GSAP) ------------------------
+        gsap.registerPlugin(ScrollTrigger);
+
+        // ▼▼▼ 変更点: 回転させるのは台座(pivot)ではなく、星(star)自体 ▼▼▼
+        gsap.to(star.rotation, {
+            z: Math.PI * 4,
+            scrollTrigger: {
+                trigger: '.scroll-content',
+                start: 'top top',
+                end: 'bottom bottom',
+                scrub: 1,
+            }
+        });
+
+
+        // --- 4. 低FPSでの描画ループ ---------------------------------
+        const clock = new THREE.Clock();
+        const fps = 15;
+        const interval = 1 / fps;
+        let delta = 0;
+
+        function animate() {
+            requestAnimationFrame(animate);
+            delta += clock.getDelta();
+            if (delta > interval) {
+                renderer.render(scene, camera);
+                delta = delta % interval;
+            }
+        }
+        animate();
+
+
+        // --- 5. ウィンドウリサイズ対応 -------------------------------
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+    </script>
+</body>
+</html>
