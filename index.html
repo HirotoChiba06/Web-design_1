@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Y2K Seamless Scroll Prototype v12</title>
+    <title>Y2K Seamless Scroll Prototype v15</title>
     <style>
         body {
             margin: 0;
@@ -46,8 +46,8 @@
 
     <div class="scroll-content">
         <div class="dummy-content">
-            <h1>Prototype v12</h1>
-            <p>床グリッドの透過を修正しました。</p>
+            <h1>Prototype v15</h1>
+            <p>パーティクルを常にループして流れるように変更しました。</p>
         </div>
     </div>
 
@@ -78,33 +78,24 @@
         // --- 2. グリッドの追加 -------------------------------------------
         const gridSize = 50;
         const gridDivisions = 50;
-        const gridColor = 0x1a237e; // グリッドの色を統一
+        const gridColor = 0x1a237e;
 
-        // 壁グリッド (GridHelperはそのまま)
         const wallGridHelper = new THREE.GridHelper(gridSize, gridDivisions, gridColor, gridColor);
         wallGridHelper.position.z = -15; 
         wallGridHelper.rotation.x = Math.PI / 2;
         scene.add(wallGridHelper);
 
-        // ▼▼▼ 変更点: 床グリッドをPlaneGeometryとMeshBasicMaterialで作成し、不透明にする ▼▼▼
         const floorPlaneGeometry = new THREE.PlaneGeometry(gridSize, gridSize, gridDivisions, gridDivisions);
-        const floorPlaneMaterial = new THREE.MeshBasicMaterial({
-            color: 0x060818, // 背景色と同じ色で完全に遮蔽
-            side: THREE.DoubleSide,
-            depthWrite: true // 深度バッファへの書き込みを有効にする
-        });
+        const floorPlaneMaterial = new THREE.MeshBasicMaterial({ color: 0x060818, side: THREE.DoubleSide, depthWrite: true });
         const floorPlane = new THREE.Mesh(floorPlaneGeometry, floorPlaneMaterial);
-        floorPlane.rotation.x = -Math.PI / 2; // 床にするために回転
-        floorPlane.position.y = -5; // 星の下に配置
-
+        floorPlane.rotation.x = -Math.PI / 2;
+        floorPlane.position.y = -5;
         scene.add(floorPlane);
 
-        // 床のグリッド線だけを別途描画（平面の上に線を描く）
         const floorGridLines = new THREE.GridHelper(gridSize, gridDivisions, gridColor, gridColor);
-        floorGridLines.position.y = -5; // 同じ高さに配置
+        floorGridLines.position.y = -5;
         scene.add(floorGridLines);
-        // ▲▲▲ 変更点: ここまで ▲▲▲
-
+        
 
         // --- 3. 星オブジェクトの作成 ---------------------------------
         const vertices = [];
@@ -114,20 +105,12 @@
         for (let i = 0; i < pointsCount * 2; i++) {
             const radius = (i % 2 === 0) ? outerRadius : innerRadius;
             const angle = (i * Math.PI) / pointsCount;
-            vertices.push(new THREE.Vector3(
-                Math.sin(angle) * radius,
-                Math.cos(angle) * radius,
-                0
-            ));
+            vertices.push(new THREE.Vector3( Math.sin(angle) * radius, Math.cos(angle) * radius, 0 ));
         }
         
         const path = new THREE.CatmullRomCurve3(vertices, true, 'catmullrom', 0);
         const geometry = new THREE.TubeGeometry(path, 400, 0.05, 12, true);
-        const material = new THREE.MeshStandardMaterial({
-            color: '#c0c0c0',
-            metalness: 0.9,
-            roughness: 0.4,
-        });
+        const material = new THREE.MeshStandardMaterial({ color: '#c0c0c0', metalness: 0.9, roughness: 0.4, });
 
         const star = new THREE.Mesh(geometry, material);
         const pivot = new THREE.Group();
@@ -135,11 +118,39 @@
         pivot.add(star);
         pivot.rotation.y = 0.6;
         pivot.rotation.x = -0.4;
+        
+        // --- 4. パーティクルの作成 ---------------------------------
+        // ▼▼▼ 変更点: パーティクルの量を調整 ▼▼▼
+        const particleCount = 1500;
+        const particlePositions = new Float32Array(particleCount * 3);
+
+        // ▼▼▼ 変更点: パーティクルの初期配置を空間全体に広げる ▼▼▼
+        for (let i = 0; i < particleCount; i++) {
+            const i3 = i * 3;
+            particlePositions[i3] = (Math.random() - 0.5) * 50; // x
+            particlePositions[i3 + 1] = (Math.random() - 0.5) * 50; // y
+            particlePositions[i3 + 2] = (Math.random() - 0.5) * 100; // z
+        }
+
+        const particleGeometry = new THREE.BufferGeometry();
+        particleGeometry.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
+
+        const particleMaterial = new THREE.PointsMaterial({
+            color: 0xffffff,
+            size: 0.1,
+            sizeAttenuation: true,
+            transparent: true,
+            blending: THREE.AdditiveBlending
+        });
+
+        const particles = new THREE.Points(particleGeometry, particleMaterial);
+        scene.add(particles);
 
 
-        // --- 4. スクロールアニメーション (GSAP) ------------------------
+        // --- 5. スクロールアニメーション (GSAP) ------------------------
         gsap.registerPlugin(ScrollTrigger);
 
+        // 星の回転
         gsap.to(star.rotation, {
             z: Math.PI * 4,
             scrollTrigger: {
@@ -149,18 +160,44 @@
                 scrub: 1,
             }
         });
+        
+        // ▼▼▼ 変更点: GSAPによるパーティクルアニメーションを削除 ▼▼▼
+        // (描画ループ内で直接アニメーションさせるため不要に)
 
 
-        // --- 5. 低FPSでの描画ループ ---------------------------------
+        // --- 6. 低FPSでの描画ループ ---------------------------------
         const clock = new THREE.Clock();
         const fps = 15;
         const interval = 1 / fps;
         let delta = 0;
+        const flowSpeed = 0.5; // パーティクルの流れる速さを調整
 
         function animate() {
             requestAnimationFrame(animate);
             delta += clock.getDelta();
+
             if (delta > interval) {
+                
+                // ▼▼▼ 変更点: ここでパーティクルをループさせる ▼▼▼
+                const positions = particleGeometry.attributes.position.array;
+                for (let i = 0; i < particleCount; i++) {
+                    const i3 = i * 3;
+                    
+                    // Y軸とZ軸の位置を更新して流す
+                    positions[i3 + 1] -= flowSpeed * 0.2; // Y (下方向)
+                    positions[i3 + 2] += flowSpeed; // Z (手前方向)
+
+                    // 画面外に出たら、奥のランダムな位置に戻す
+                    if (positions[i3 + 2] > camera.position.z) {
+                        positions[i3] = (Math.random() - 0.5) * 50;
+                        positions[i3 + 1] = (Math.random() - 0.5) * 50;
+                        positions[i3 + 2] = -50; // Z座標を一番奥にリセット
+                    }
+                }
+                // 更新をThree.jsに伝える
+                particleGeometry.attributes.position.needsUpdate = true;
+                // ▲▲▲ 変更点: ここまで ▲▲▲
+                
                 renderer.render(scene, camera);
                 delta = delta % interval;
             }
@@ -168,7 +205,7 @@
         animate();
 
 
-        // --- 6. ウィンドウリサイズ対応 -------------------------------
+        // --- 7. ウィンドウリサイズ対応 -------------------------------
         window.addEventListener('resize', () => {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
