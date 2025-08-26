@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Y2K Seamless Scroll Prototype v7</title>
+    <title>Y2K Seamless Scroll Prototype v12</title>
     <style>
         body {
             margin: 0;
@@ -46,8 +46,8 @@
 
     <div class="scroll-content">
         <div class="dummy-content">
-            <h1>Prototype v7</h1>
-            <p>オブジェクトを右斜めに配置しました。</p>
+            <h1>Prototype v12</h1>
+            <p>床グリッドの透過を修正しました。</p>
         </div>
     </div>
 
@@ -75,7 +75,38 @@
         scene.add(directionalLight);
 
 
-        // --- 2. 星オブジェクトの作成 ---------------------------------
+        // --- 2. グリッドの追加 -------------------------------------------
+        const gridSize = 50;
+        const gridDivisions = 50;
+        const gridColor = 0x1a237e; // グリッドの色を統一
+
+        // 壁グリッド (GridHelperはそのまま)
+        const wallGridHelper = new THREE.GridHelper(gridSize, gridDivisions, gridColor, gridColor);
+        wallGridHelper.position.z = -15; 
+        wallGridHelper.rotation.x = Math.PI / 2;
+        scene.add(wallGridHelper);
+
+        // ▼▼▼ 変更点: 床グリッドをPlaneGeometryとMeshBasicMaterialで作成し、不透明にする ▼▼▼
+        const floorPlaneGeometry = new THREE.PlaneGeometry(gridSize, gridSize, gridDivisions, gridDivisions);
+        const floorPlaneMaterial = new THREE.MeshBasicMaterial({
+            color: 0x060818, // 背景色と同じ色で完全に遮蔽
+            side: THREE.DoubleSide,
+            depthWrite: true // 深度バッファへの書き込みを有効にする
+        });
+        const floorPlane = new THREE.Mesh(floorPlaneGeometry, floorPlaneMaterial);
+        floorPlane.rotation.x = -Math.PI / 2; // 床にするために回転
+        floorPlane.position.y = -5; // 星の下に配置
+
+        scene.add(floorPlane);
+
+        // 床のグリッド線だけを別途描画（平面の上に線を描く）
+        const floorGridLines = new THREE.GridHelper(gridSize, gridDivisions, gridColor, gridColor);
+        floorGridLines.position.y = -5; // 同じ高さに配置
+        scene.add(floorGridLines);
+        // ▲▲▲ 変更点: ここまで ▲▲▲
+
+
+        // --- 3. 星オブジェクトの作成 ---------------------------------
         const vertices = [];
         const outerRadius = 2;
         const innerRadius = 1;
@@ -99,24 +130,16 @@
         });
 
         const star = new THREE.Mesh(geometry, material);
-        // ▼▼▼ 変更点: ここから ▼▼▼
-        // 透明な台座（pivot）を作成
         const pivot = new THREE.Group();
-        scene.add(pivot); // シーンには台座を追加
-
-        // 台座に星を追加
+        scene.add(pivot);
         pivot.add(star);
-
-        // 台座自体を傾けることで、全体の向きを調整
-        pivot.rotation.y = 0.6; // Y軸回転（左右の向き）
-        pivot.rotation.x = -0.4;  // X軸回転（上下の傾き）
-        // ▲▲▲ 変更点: ここまで ▲▲▲
+        pivot.rotation.y = 0.6;
+        pivot.rotation.x = -0.4;
 
 
-        // --- 3. スクロールアニメーション (GSAP) ------------------------
+        // --- 4. スクロールアニメーション (GSAP) ------------------------
         gsap.registerPlugin(ScrollTrigger);
 
-        // ▼▼▼ 変更点: 回転させるのは台座(pivot)ではなく、星(star)自体 ▼▼▼
         gsap.to(star.rotation, {
             z: Math.PI * 4,
             scrollTrigger: {
@@ -128,7 +151,7 @@
         });
 
 
-        // --- 4. 低FPSでの描画ループ ---------------------------------
+        // --- 5. 低FPSでの描画ループ ---------------------------------
         const clock = new THREE.Clock();
         const fps = 15;
         const interval = 1 / fps;
@@ -145,7 +168,7 @@
         animate();
 
 
-        // --- 5. ウィンドウリサイズ対応 -------------------------------
+        // --- 6. ウィンドウリサイズ対応 -------------------------------
         window.addEventListener('resize', () => {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
